@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, where, orderBy, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA9gpJ4r6FVzeX8b00JvNblzE8dkhUGFk4",
@@ -15,7 +14,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
 
 // ==========================================
 // DB FUNCIONES (FIREBASE)
@@ -42,17 +40,11 @@ async function deleteSubjectAndApuntesDB(materiaId) {
     // Borrar materia
     await deleteDoc(doc(db, `users/${user.uid}/materias`, materiaId));
     
-    // Borrar apuntes (Firestore) y archivos (Storage) asociados
+    // Borrar apuntes (Firestore)
     const q = query(collection(db, `users/${user.uid}/apuntes`), where('materiaId', '==', materiaId));
     const snapshot = await getDocs(q);
     
     for (const d of snapshot.docs) {
-        const apunte = d.data();
-        if (apunte.storagePath) {
-            try {
-                await deleteObject(ref(storage, apunte.storagePath));
-            } catch (e) { console.warn("Archivo no encontrado en storage", e); }
-        }
         await deleteDoc(d.ref);
     }
 }
@@ -69,30 +61,13 @@ async function saveApunteDB(apunte) {
     const user = auth.currentUser;
     if (!user) throw new Error("No autenticado");
 
-    // Subir a Storage
-    const storagePath = `users/${user.uid}/apuntes/${apunte.id}`;
-    const storageRef = ref(storage, storagePath);
-    
-    // Subir el string Base64 (data_url)
-    await uploadString(storageRef, apunte.dataBase64, 'data_url');
-    const downloadURL = await getDownloadURL(storageRef);
-    
-    // Guardar en Firestore SIN el base64 pesado
-    const apunteToSave = { ...apunte, storagePath, downloadURL };
-    delete apunteToSave.dataBase64;
-    
-    await setDoc(doc(db, `users/${user.uid}/apuntes`, apunte.id), apunteToSave);
+    // Guardar en Firestore CON el base64 ligero
+    await setDoc(doc(db, `users/${user.uid}/apuntes`, apunte.id), apunte);
 }
 
 async function deleteApunteDB(apunteId) {
     const user = auth.currentUser;
     if (!user) throw new Error("No autenticado");
-    
-    // Intentar borrar de Storage
-    const storagePath = `users/${user.uid}/apuntes/${apunteId}`;
-    try {
-        await deleteObject(ref(storage, storagePath));
-    } catch(e) { console.warn("Archivo no encontrado en storage", e); }
     
     // Borrar de Firestore
     await deleteDoc(doc(db, `users/${user.uid}/apuntes`, apunteId));
@@ -113,7 +88,7 @@ function compressImage(file) {
                 let width = img.width;
                 let height = img.height;
                 
-                const MAX_WIDTH = 1600;
+                const MAX_WIDTH = 1000;
                 if (width > MAX_WIDTH) {
                     height = Math.round((height * MAX_WIDTH) / width);
                     width = MAX_WIDTH;
@@ -125,8 +100,8 @@ function compressImage(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                // Comprimir a JPEG con calidad 0.7
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                // Comprimir a JPEG con calidad 0.6 para garantizar < 1MB en Firestore
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
                 resolve(dataUrl);
             };
             img.onerror = () => reject(new Error("Error al cargar la imagen."));
@@ -502,9 +477,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const win = window.open();
                 if (win) {
                     if(isPdf) {
-                        win.document.write(`<iframe src="${apunte.downloadURL}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%; position:absolute;"></iframe>`);
+                        win.document.write(`<iframe src="${apunte.dataBase64}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%; position:absolute;"></iframe>`);
                     } else {
-                        win.document.write(`<body style="margin:0;display:flex;justify-content:center;align-items:center;background:#111;min-height:100vh;"><img src="${apunte.downloadURL}" style="max-width:100%;max-height:100vh;"></body>`);
+                        win.document.write(`<body style="margin:0;display:flex;justify-content:center;align-items:center;background:#111;min-height:100vh;"><img src="${apunte.dataBase64}" style="max-width:100%;max-height:100vh;"></body>`);
                     }
                 } else {
                     alert("Por favor habilita las ventanas emergentes (pop-ups) en tu navegador para ver el archivo.");
@@ -553,8 +528,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return showError(noteModalError, 'Formato no soportado. Solo JPG, PNG o PDF.');
         }
 
-        if (isPdf && file.size > 8 * 1024 * 1024) {
-            return showError(noteModalError, 'El PDF es muy pesado. Máximo 8MB.');
+        // Limitar PDFs a 700KB para que quepan en Firestore (1MB máximo por documento)
+        if (isPdf && file.size > 700 * 1024) {
+            return showError(noteModalError, 'El PDF es muy pesado. Máximo 700KB por base de datos gratuita.');
         }
 
         // Cierra el modal y muestra el loader
@@ -579,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tipo: isPdf ? 'pdf' : 'image',
                 fecha: new Date().toISOString(),
                 size: approxBytes,
-                dataBase64: dataBase64 // Se usa temporalmente para subir, luego saveApunteDB lo borra
+                dataBase64: dataBase64
             };
 
             await saveApunteDB(newApunte);
@@ -703,8 +679,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return showError(uploadModeError, 'Formato no soportado. Solo JPG, PNG o PDF.');
             }
 
-            if (isPdf && file.size > 8 * 1024 * 1024) {
-                return showError(uploadModeError, 'El PDF es muy pesado. Máximo 8MB.');
+            // Limitar PDFs a 700KB para que quepan en Firestore
+            if (isPdf && file.size > 700 * 1024) {
+                return showError(uploadModeError, 'El PDF es muy pesado. Máximo 700KB por base de datos gratuita.');
             }
 
             clearError(uploadModeError);
@@ -729,7 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tipo: isPdf ? 'pdf' : 'image',
                     fecha: new Date().toISOString(),
                     size: approxBytes,
-                    dataBase64: dataBase64 // Se usa temporalmente para subir, luego saveApunteDB lo borra
+                    dataBase64: dataBase64
                 };
 
                 await saveApunteDB(newApunte);
@@ -813,7 +790,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let previewHtml = `<div class="note-icon" style="margin: 10px 0;"><i class="${iconClass}"></i></div>`;
                 if (!isPdf) {
                     previewHtml = `<div style="height: 80px; overflow: hidden; margin-bottom: 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center; background: #000;">
-                                     <img src="${apunte.downloadURL}" style="max-width: 100%; max-height: 100%;">
+                                     <img src="${apunte.dataBase64}" style="max-width: 100%; max-height: 100%;">
                                    </div>`;
                 }
                 
@@ -847,20 +824,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 for (const apunte of apuntes) {
                     try {
-                        const response = await fetch(apunte.downloadURL);
-                        const arrayBuffer = await response.arrayBuffer();
-
                         if (apunte.tipo === 'image') {
                             // Es una imagen, incrustarla en una nueva página A4
                             const page = pdfDoc.addPage([595.28, 841.89]); // A4 en puntos
                             const { width, height } = page.getSize();
                             
                             let imgEmbed;
-                            // Determinar si es jpeg o png (asumimos jpg por defecto a menos que tenga algo específico)
-                            try {
-                                imgEmbed = await pdfDoc.embedJpg(arrayBuffer);
-                            } catch (e) {
-                                imgEmbed = await pdfDoc.embedPng(arrayBuffer);
+                            // Determinar si es jpeg o png desde el base64
+                            if (apunte.dataBase64.startsWith('data:image/png')) {
+                                imgEmbed = await pdfDoc.embedPng(apunte.dataBase64);
+                            } else {
+                                // Por defecto tratamos como JPEG
+                                imgEmbed = await pdfDoc.embedJpg(apunte.dataBase64);
                             }
                             
                             const imgDims = imgEmbed.scaleToFit(width - 40, height - 40); // 20pt de margen por lado
@@ -875,7 +850,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                         } else if (apunte.tipo === 'pdf') {
                             // Es un PDF, cargar y copiar todas sus páginas
-                            const pdfToMerge = await PDFDocument.load(arrayBuffer);
+                            const existingPdfBytes = apunte.dataBase64;
+                            // pdf-lib requiere ArrayBuffer o Uint8Array para cargar PDFs base64
+                            const pdfToMerge = await PDFDocument.load(existingPdfBytes);
                             const copiedPages = await pdfDoc.copyPages(pdfToMerge, pdfToMerge.getPageIndices());
                             
                             copiedPages.forEach((page) => {
