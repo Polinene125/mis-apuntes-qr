@@ -52,7 +52,7 @@ async function deleteSubjectAndApuntesDB(materiaId) {
 async function getApuntesDB(materiaId) {
     const user = auth.currentUser;
     if (!user) throw new Error("No autenticado");
-    const q = query(collection(db, `users/${user.uid}/apuntes`), where('materiaId', '==', materiaId), orderBy('fecha', 'asc'));
+    const q = query(collection(db, `users/${user.uid}/apuntes`), where('materiaId', '==', materiaId));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
