@@ -502,29 +502,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const sizeStr = formatBytes(apunte.size || 0);
             
             card.innerHTML = `
-                <div class="note-thumbnail">
-                    ${isPdf 
-                        ? `<i class="fa-solid fa-file-pdf" style="font-size: 3rem; color: var(--accent-coral);"></i>` 
-                        : `<img src="${apunte.downloadURL}" alt="${apunte.titulo}">`}
-                    <button class="btn-danger btn-sm delete-btn" title="Borrar" style="position: absolute; top: 10px; right: 10px; border-radius: 50%; padding: 8px; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; z-index: 10; border: none; cursor: pointer;">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
+                <div class="note-icon"><i class="${iconClass}"></i></div>
+                <div class="note-title" title="${apunte.titulo}">${apunte.titulo}</div>
+                <div class="note-meta">
+                    <span>${dateStr}</span>
+                    <span>${sizeStr}</span>
                 </div>
-                <div class="note-card-body">
-                    <div class="note-title" title="${apunte.titulo}">${apunte.titulo}</div>
-                    <div class="note-meta">
-                        <span>${dateStr}</span>
-                        <span>${sizeStr}</span>
-                    </div>
+                <div class="note-actions">
+                    <button class="btn btn-secondary btn-sm view-btn" style="flex:1;">Ver</button>
+                    <button class="btn btn-danger btn-sm delete-btn" title="Borrar"><i class="fa-solid fa-trash"></i></button>
                 </div>
             `;
             
-            card.addEventListener('mouseenter', () => card.querySelector('.delete-btn').style.opacity = '1');
-            card.addEventListener('mouseleave', () => card.querySelector('.delete-btn').style.opacity = '0');
-            
-            // Evento Ver (hacer clic en la tarjeta)
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('.delete-btn')) return;
+            // Evento Ver
+            card.querySelector('.view-btn').addEventListener('click', () => {
                 const win = window.open();
                 if (win) {
                     if(isPdf) {
