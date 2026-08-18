@@ -235,9 +235,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // INICIALIZACIÓN DE LA APP
     // ==========================================
+    const initialParams = new URLSearchParams(window.location.search);
+    const urlHash = initialParams.get('hash');
     const storedHash = localStorage.getItem('mis_apuntes_pwd_hash');
-    if (storedHash) blockLogin.style.display = 'block';
-    else blockCreatePassword.style.display = 'block';
+    
+    if (urlHash || storedHash) {
+        if (urlHash) window.sessionAuthHash = urlHash;
+        blockLogin.style.display = 'block';
+    } else {
+        blockCreatePassword.style.display = 'block';
+    }
 
     function showError(element, message) {
         element.textContent = message;
@@ -300,9 +307,14 @@ document.addEventListener('DOMContentLoaded', () => {
         clearError(loginError);
         const p = inputLoginPassword.value;
         if (!p) return showError(loginError, 'Ingresa tu contraseña.');
-        const currentHash = localStorage.getItem('mis_apuntes_pwd_hash');
+        
+        const currentHash = window.sessionAuthHash || localStorage.getItem('mis_apuntes_pwd_hash');
         const inputHash = await hashPassword(p);
+        
         if (inputHash === currentHash) {
+            if (window.sessionAuthHash) {
+                localStorage.setItem('mis_apuntes_pwd_hash', window.sessionAuthHash);
+            }
             inputLoginPassword.value = '';
             enterApp();
         } else {
@@ -597,7 +609,8 @@ document.addEventListener('DOMContentLoaded', () => {
         subjectQrContainer.innerHTML = '';
         
         const baseUrl = window.location.origin + window.location.pathname;
-        const qrUrl = `${baseUrl}?materia=${materiaId}&nombre=${encodeURIComponent(materiaName)}&modo=subir`;
+        const storedHash = localStorage.getItem('mis_apuntes_pwd_hash') || '';
+        const qrUrl = `${baseUrl}?materia=${materiaId}&nombre=${encodeURIComponent(materiaName)}&hash=${storedHash}&modo=subir`;
 
         currentQrCode = new QRCode(subjectQrContainer, {
             text: qrUrl,
