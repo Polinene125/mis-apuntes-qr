@@ -36,30 +36,34 @@
             <div class="card-body">
                 <!-- Bloque 1: Crear contraseña -->
                 <div id="block-create-password" style="display: none;">
-                    <h2>Crear contraseña</h2>
-                    <p class="subtitle">Protege tus apuntes con una contraseña.</p>
+                    <h2>Crear cuenta</h2>
+                    <p style="margin-bottom: 20px; font-size: 0.95rem; color: #555;">Protege tus apuntes creando una cuenta segura en la nube.</p>
                     <p id="create-error" class="error-msg" style="display: none;"></p>
                     <div class="input-group">
-                        <input type="password" placeholder="Nueva contraseña" id="new-password">
+                        <input type="email" placeholder="Correo electrónico" id="input-new-email">
+                    </div>
+                    <div class="input-group">
+                        <input type="password" placeholder="Contraseña segura" id="new-password">
                     </div>
                     <div class="input-group">
                         <input type="password" placeholder="Repetir contraseña" id="confirm-password">
                     </div>
-                    <button class="btn btn-primary" id="btn-save">Guardar</button>
+                    <button class="btn btn-primary" id="btn-save">Crear cuenta</button>
                 </div>
 
                 <!-- Bloque 2: Iniciar sesión -->
                 <div id="block-login" style="display: none;">
-                    <h2>Iniciar sesión</h2>
-                    <p class="subtitle">Ingresa para ver tus apuntes.</p>
+                    <h2 style="font-family: 'Kalam', cursive; font-size: 2rem; color: var(--primary-color); margin-bottom: 10px;">¡Hola de nuevo!</h2>
+                    <p style="margin-bottom: 20px; font-size: 0.95rem; color: #555;">Ingresa tus credenciales para acceder a tus apuntes.</p>
                     <p id="login-error" class="error-msg" style="display: none;"></p>
+                    <div class="input-group">
+                        <input type="email" placeholder="Correo electrónico" id="input-login-email">
+                    </div>
                     <div class="input-group">
                         <input type="password" placeholder="Tu contraseña" id="login-password">
                     </div>
-                    <button class="btn btn-accent" id="btn-login">Entrar</button>
-                    <div class="text-center mt-3">
-                        <a href="#" id="link-forgot" class="forgot-link">¿Olvidé mi contraseña / Borrar todo?</a>
-                    </div>
+                    <button class="btn btn-primary" id="btn-login">Entrar</button>
+                    <a href="#" class="forgot-link" id="link-forgot">Cerrar sesión segura</a>
                 </div>
             </div>
         </div>
@@ -259,6 +263,6 @@
         <p style="margin-top: 20px; font-weight: 600; font-size: 1.1rem; color: var(--accent-yellow); letter-spacing: 1px;">Procesando...</p>
     </div>
 
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>

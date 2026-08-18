@@ -1,104 +1,101 @@
-// script.js
-// Mis Apuntes QR - Lógica principal
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, where, orderBy, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
-const DB_NAME = 'apuntesQR';
-const DB_VERSION = 1;
-let db = null;
+const firebaseConfig = {
+  apiKey: "AIzaSyA9gpJ4r6FVzeX8b00JvNblzE8dkhUGFk4",
+  authDomain: "mis-apuntes-e4ea1.firebaseapp.com",
+  projectId: "mis-apuntes-e4ea1",
+  storageBucket: "mis-apuntes-e4ea1.firebasestorage.app",
+  messagingSenderId: "204311657869",
+  appId: "1:204311657869:web:8fe5511b8627c012a791c4"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
 
 // ==========================================
-// DB & CRYPTO FUNCIONES
+// DB FUNCIONES (FIREBASE)
 // ==========================================
-function initDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        request.onupgradeneeded = (e) => {
-            const database = e.target.result;
-            if (!database.objectStoreNames.contains('materias')) {
-                database.createObjectStore('materias', { keyPath: 'id' });
-            }
-            if (!database.objectStoreNames.contains('apuntes')) {
-                const apuntesStore = database.createObjectStore('apuntes', { keyPath: 'id' });
-                apuntesStore.createIndex('materiaId', 'materiaId', { unique: false });
-            }
-        };
-        request.onsuccess = (e) => { db = e.target.result; resolve(db); };
-        request.onerror = (e) => reject(e);
-    });
+async function getSubjectsDB() {
+    const user = auth.currentUser;
+    if (!user) throw new Error("No autenticado");
+    const q = query(collection(db, `users/${user.uid}/materias`));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
-function getSubjectsDB() {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['materias'], 'readonly');
-        const store = transaction.objectStore('materias');
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = (e) => reject(e);
-    });
+async function saveSubjectDB(subject) {
+    const user = auth.currentUser;
+    if (!user) throw new Error("No autenticado");
+    const subjectRef = doc(db, `users/${user.uid}/materias`, subject.id);
+    await setDoc(subjectRef, subject);
 }
 
-function saveSubjectDB(subject) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['materias'], 'readwrite');
-        const store = transaction.objectStore('materias');
-        const request = store.put(subject);
-        request.onsuccess = () => resolve();
-        request.onerror = (e) => reject(e);
-    });
+async function deleteSubjectAndApuntesDB(materiaId) {
+    const user = auth.currentUser;
+    if (!user) throw new Error("No autenticado");
+    
+    // Borrar materia
+    await deleteDoc(doc(db, `users/${user.uid}/materias`, materiaId));
+    
+    // Borrar apuntes (Firestore) y archivos (Storage) asociados
+    const q = query(collection(db, `users/${user.uid}/apuntes`), where('materiaId', '==', materiaId));
+    const snapshot = await getDocs(q);
+    
+    for (const d of snapshot.docs) {
+        const apunte = d.data();
+        if (apunte.storagePath) {
+            try {
+                await deleteObject(ref(storage, apunte.storagePath));
+            } catch (e) { console.warn("Archivo no encontrado en storage", e); }
+        }
+        await deleteDoc(d.ref);
+    }
 }
 
-function deleteSubjectAndApuntesDB(materiaId) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['materias', 'apuntes'], 'readwrite');
-        transaction.objectStore('materias').delete(materiaId);
-        
-        const apuntesStore = transaction.objectStore('apuntes');
-        const getApuntesRequest = apuntesStore.index('materiaId').getAllKeys(IDBKeyRange.only(materiaId));
-        
-        getApuntesRequest.onsuccess = () => {
-            getApuntesRequest.result.forEach(key => apuntesStore.delete(key));
-        };
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = (e) => reject(e);
-    });
+async function getApuntesDB(materiaId) {
+    const user = auth.currentUser;
+    if (!user) throw new Error("No autenticado");
+    const q = query(collection(db, `users/${user.uid}/apuntes`), where('materiaId', '==', materiaId), orderBy('fecha', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
-function getApuntesDB(materiaId) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['apuntes'], 'readonly');
-        const store = transaction.objectStore('apuntes');
-        const index = store.index('materiaId');
-        const request = index.getAll(IDBKeyRange.only(materiaId));
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = (e) => reject(e);
-    });
+async function saveApunteDB(apunte) {
+    const user = auth.currentUser;
+    if (!user) throw new Error("No autenticado");
+
+    // Subir a Storage
+    const storagePath = `users/${user.uid}/apuntes/${apunte.id}`;
+    const storageRef = ref(storage, storagePath);
+    
+    // Subir el string Base64 (data_url)
+    await uploadString(storageRef, apunte.dataBase64, 'data_url');
+    const downloadURL = await getDownloadURL(storageRef);
+    
+    // Guardar en Firestore SIN el base64 pesado
+    const apunteToSave = { ...apunte, storagePath, downloadURL };
+    delete apunteToSave.dataBase64;
+    
+    await setDoc(doc(db, `users/${user.uid}/apuntes`, apunte.id), apunteToSave);
 }
 
-function saveApunteDB(apunte) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['apuntes'], 'readwrite');
-        const store = transaction.objectStore('apuntes');
-        const request = store.put(apunte);
-        request.onsuccess = () => resolve();
-        request.onerror = (e) => reject(e);
-    });
-}
-
-function deleteApunteDB(apunteId) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['apuntes'], 'readwrite');
-        const store = transaction.objectStore('apuntes');
-        const request = store.delete(apunteId);
-        request.onsuccess = () => resolve();
-        request.onerror = (e) => reject(e);
-    });
-}
-
-async function hashPassword(password) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+async function deleteApunteDB(apunteId) {
+    const user = auth.currentUser;
+    if (!user) throw new Error("No autenticado");
+    
+    // Intentar borrar de Storage
+    const storagePath = `users/${user.uid}/apuntes/${apunteId}`;
+    try {
+        await deleteObject(ref(storage, storagePath));
+    } catch(e) { console.warn("Archivo no encontrado en storage", e); }
+    
+    // Borrar de Firestore
+    await deleteDoc(doc(db, `users/${user.uid}/apuntes`, apunteId));
 }
 
 // ==========================================
@@ -169,8 +166,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const blockLogin = document.getElementById('block-login');
     const btnSave = document.getElementById('btn-save');
     const btnLogin = document.getElementById('btn-login');
+    const inputNewEmail = document.getElementById('input-new-email');
     const inputNewPassword = document.getElementById('new-password');
     const inputConfirmPassword = document.getElementById('confirm-password');
+    const inputLoginEmail = document.getElementById('input-login-email');
     const inputLoginPassword = document.getElementById('login-password');
     const createError = document.getElementById('create-error');
     const loginError = document.getElementById('login-error');
@@ -235,16 +234,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // INICIALIZACIÓN DE LA APP
     // ==========================================
-    const initialParams = new URLSearchParams(window.location.search);
-    const urlHash = initialParams.get('hash');
-    const storedHash = localStorage.getItem('mis_apuntes_pwd_hash');
-    
-    if (urlHash || storedHash) {
-        if (urlHash) window.sessionAuthHash = urlHash;
-        blockLogin.style.display = 'block';
-    } else {
-        blockCreatePassword.style.display = 'block';
-    }
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            // Usuario logueado
+            enterApp();
+        } else {
+            // Usuario no logueado
+            if(authContainer) authContainer.style.display = 'flex';
+            if(appContainer) appContainer.style.display = 'none';
+            blockLogin.style.display = 'block';
+            blockCreatePassword.style.display = 'block'; // Mostrar ambos, o hacer toggle
+        }
+    });
 
     function showError(element, message) {
         element.textContent = message;
@@ -265,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(authContainer) authContainer.style.display = 'none';
         
         try {
-            if (!db) await initDB();
+            // initDB ya no es necesario, Firebase se inicializa globalmente
             
             const params = new URLSearchParams(window.location.search);
             const materiaId = params.get('materia');
@@ -292,33 +293,34 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     btnSave.addEventListener('click', async () => {
         clearError(createError);
+        const email = inputNewEmail.value;
         const p1 = inputNewPassword.value;
         const p2 = inputConfirmPassword.value;
-        if (!p1 || !p2) return showError(createError, 'Por favor completa ambos campos.');
+        
+        if (!email || !p1 || !p2) return showError(createError, 'Completa todos los campos.');
         if (p1 !== p2) return showError(createError, 'Las contraseñas no coinciden.');
-        if (p1.length < 4) return showError(createError, 'La contraseña es muy corta.');
-        const hash = await hashPassword(p1);
-        localStorage.setItem('mis_apuntes_pwd_hash', hash);
-        inputNewPassword.value = ''; inputConfirmPassword.value = '';
-        enterApp();
+        if (p1.length < 6) return showError(createError, 'La contraseña debe tener 6 caracteres.');
+        
+        try {
+            await createUserWithEmailAndPassword(auth, email, p1);
+            // Firebase Auth dispara onAuthStateChanged que llama enterApp()
+        } catch (error) {
+            showError(createError, 'Error: ' + error.message);
+        }
     });
 
     btnLogin.addEventListener('click', async () => {
         clearError(loginError);
+        const email = inputLoginEmail.value;
         const p = inputLoginPassword.value;
-        if (!p) return showError(loginError, 'Ingresa tu contraseña.');
         
-        const currentHash = window.sessionAuthHash || localStorage.getItem('mis_apuntes_pwd_hash');
-        const inputHash = await hashPassword(p);
+        if (!email || !p) return showError(loginError, 'Ingresa correo y contraseña.');
         
-        if (inputHash === currentHash) {
-            if (window.sessionAuthHash) {
-                localStorage.setItem('mis_apuntes_pwd_hash', window.sessionAuthHash);
-            }
-            inputLoginPassword.value = '';
-            enterApp();
-        } else {
-            showError(loginError, 'Contraseña incorrecta.');
+        try {
+            await signInWithEmailAndPassword(auth, email, p);
+            // Firebase Auth dispara onAuthStateChanged que llama enterApp()
+        } catch (error) {
+            showError(loginError, 'Credenciales incorrectas.');
             inputLoginPassword.value = ''; inputLoginPassword.focus();
         }
     });
@@ -326,23 +328,17 @@ document.addEventListener('DOMContentLoaded', () => {
     inputLoginPassword.addEventListener('keypress', (e) => { if (e.key === 'Enter') btnLogin.click(); });
 
     if (linkForgot) {
-        linkForgot.addEventListener('click', (e) => {
+        linkForgot.addEventListener('click', async (e) => {
             e.preventDefault();
-            if (confirm("¿Estás seguro que deseas borrar tu contraseña? Esto eliminará también todos tus apuntes e imágenes.")) {
-                if (confirm("¡ATENCIÓN! Esta acción es irreversible. ¿Confirmas borrar todo el almacenamiento local?")) {
-                    localStorage.clear();
-                    const req = indexedDB.deleteDatabase(DB_NAME);
-                    req.onsuccess = () => location.reload();
-                    req.onerror = () => location.reload();
-                    req.onblocked = () => location.reload();
-                }
-            }
+            await signOut(auth);
+            location.reload();
         });
     }
 
     if (btnLogout) {
-        btnLogout.addEventListener('click', (e) => {
+        btnLogout.addEventListener('click', async (e) => {
             e.preventDefault();
+            await signOut(auth);
             appContainer.style.display = 'none';
             if(authContainer) authContainer.style.display = 'block';
         });
@@ -486,9 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const iconClass = isPdf ? 'fa-solid fa-file-pdf' : 'fa-regular fa-image';
             const dateStr = new Date(apunte.fecha).toLocaleDateString();
             
-            // Estimar tamaño desde base64 (muy aproximado)
-            const approxBytes = Math.round((apunte.dataBase64.length * 3) / 4);
-            const sizeStr = formatBytes(approxBytes);
+            const sizeStr = formatBytes(apunte.size || 0);
             
             card.innerHTML = `
                 <div class="note-icon"><i class="${iconClass}"></i></div>
@@ -508,9 +502,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const win = window.open();
                 if (win) {
                     if(isPdf) {
-                        win.document.write(`<iframe src="${apunte.dataBase64}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%; position:absolute;"></iframe>`);
+                        win.document.write(`<iframe src="${apunte.downloadURL}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%; position:absolute;"></iframe>`);
                     } else {
-                        win.document.write(`<body style="margin:0;display:flex;justify-content:center;align-items:center;background:#111;min-height:100vh;"><img src="${apunte.dataBase64}" style="max-width:100%;max-height:100vh;"></body>`);
+                        win.document.write(`<body style="margin:0;display:flex;justify-content:center;align-items:center;background:#111;min-height:100vh;"><img src="${apunte.downloadURL}" style="max-width:100%;max-height:100vh;"></body>`);
                     }
                 } else {
                     alert("Por favor habilita las ventanas emergentes (pop-ups) en tu navegador para ver el archivo.");
@@ -576,13 +570,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 dataBase64 = await fileToBase64(file);
             }
             
+            const approxBytes = Math.round((dataBase64.length * 3) / 4);
+            
             const newApunte = {
                 id: 'apt_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7),
                 materiaId: activeSubjectId,
                 titulo: title,
                 tipo: isPdf ? 'pdf' : 'image',
                 fecha: new Date().toISOString(),
-                dataBase64: dataBase64
+                size: approxBytes,
+                dataBase64: dataBase64 // Se usa temporalmente para subir, luego saveApunteDB lo borra
             };
 
             await saveApunteDB(newApunte);
@@ -609,8 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
         subjectQrContainer.innerHTML = '';
         
         const baseUrl = window.location.origin + window.location.pathname;
-        const storedHash = localStorage.getItem('mis_apuntes_pwd_hash') || '';
-        const qrUrl = `${baseUrl}?materia=${materiaId}&nombre=${encodeURIComponent(materiaName)}&hash=${storedHash}&modo=subir`;
+        const qrUrl = `${baseUrl}?materia=${materiaId}&nombre=${encodeURIComponent(materiaName)}&modo=subir`;
 
         currentQrCode = new QRCode(subjectQrContainer, {
             text: qrUrl,
@@ -724,13 +720,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     dataBase64 = await fileToBase64(file);
                 }
                 
+                const approxBytes = Math.round((dataBase64.length * 3) / 4);
+                
                 const newApunte = {
                     id: 'apt_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7),
                     materiaId: uploadMateria.id,
                     titulo: title,
                     tipo: isPdf ? 'pdf' : 'image',
                     fecha: new Date().toISOString(),
-                    dataBase64: dataBase64
+                    size: approxBytes,
+                    dataBase64: dataBase64 // Se usa temporalmente para subir, luego saveApunteDB lo borra
                 };
 
                 await saveApunteDB(newApunte);
@@ -814,7 +813,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let previewHtml = `<div class="note-icon" style="margin: 10px 0;"><i class="${iconClass}"></i></div>`;
                 if (!isPdf) {
                     previewHtml = `<div style="height: 80px; overflow: hidden; margin-bottom: 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center; background: #000;">
-                                     <img src="${apunte.dataBase64}" style="max-width: 100%; max-height: 100%;">
+                                     <img src="${apunte.downloadURL}" style="max-width: 100%; max-height: 100%;">
                                    </div>`;
                 }
                 
@@ -847,40 +846,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 const pdfDoc = await PDFDocument.create();
                 
                 for (const apunte of apuntes) {
-                    if (apunte.tipo === 'image') {
-                        // Es una imagen, incrustarla en una nueva página A4
-                        const page = pdfDoc.addPage([595.28, 841.89]); // A4 en puntos
-                        const { width, height } = page.getSize();
-                        
-                        let imgEmbed;
-                        // Determinar si es jpeg o png desde el base64
-                        if (apunte.dataBase64.startsWith('data:image/png')) {
-                            imgEmbed = await pdfDoc.embedPng(apunte.dataBase64);
-                        } else {
-                            // Por defecto tratamos como JPEG
-                            imgEmbed = await pdfDoc.embedJpg(apunte.dataBase64);
+                    try {
+                        const response = await fetch(apunte.downloadURL);
+                        const arrayBuffer = await response.arrayBuffer();
+
+                        if (apunte.tipo === 'image') {
+                            // Es una imagen, incrustarla en una nueva página A4
+                            const page = pdfDoc.addPage([595.28, 841.89]); // A4 en puntos
+                            const { width, height } = page.getSize();
+                            
+                            let imgEmbed;
+                            // Determinar si es jpeg o png (asumimos jpg por defecto a menos que tenga algo específico)
+                            try {
+                                imgEmbed = await pdfDoc.embedJpg(arrayBuffer);
+                            } catch (e) {
+                                imgEmbed = await pdfDoc.embedPng(arrayBuffer);
+                            }
+                            
+                            const imgDims = imgEmbed.scaleToFit(width - 40, height - 40); // 20pt de margen por lado
+                            
+                            // Centrar imagen
+                            page.drawImage(imgEmbed, {
+                                x: width / 2 - imgDims.width / 2,
+                                y: height / 2 - imgDims.height / 2,
+                                width: imgDims.width,
+                                height: imgDims.height
+                            });
+                            
+                        } else if (apunte.tipo === 'pdf') {
+                            // Es un PDF, cargar y copiar todas sus páginas
+                            const pdfToMerge = await PDFDocument.load(arrayBuffer);
+                            const copiedPages = await pdfDoc.copyPages(pdfToMerge, pdfToMerge.getPageIndices());
+                            
+                            copiedPages.forEach((page) => {
+                                pdfDoc.addPage(page);
+                            });
                         }
-                        
-                        const imgDims = imgEmbed.scaleToFit(width - 40, height - 40); // 20pt de margen por lado
-                        
-                        // Centrar imagen
-                        page.drawImage(imgEmbed, {
-                            x: width / 2 - imgDims.width / 2,
-                            y: height / 2 - imgDims.height / 2,
-                            width: imgDims.width,
-                            height: imgDims.height
-                        });
-                        
-                    } else if (apunte.tipo === 'pdf') {
-                        // Es un PDF, cargar y copiar todas sus páginas
-                        const existingPdfBytes = apunte.dataBase64;
-                        // pdf-lib requiere ArrayBuffer o Uint8Array para cargar PDFs base64
-                        const pdfToMerge = await PDFDocument.load(existingPdfBytes);
-                        const copiedPages = await pdfDoc.copyPages(pdfToMerge, pdfToMerge.getPageIndices());
-                        
-                        copiedPages.forEach((page) => {
-                            pdfDoc.addPage(page);
-                        });
+                    } catch(err) {
+                        console.warn("No se pudo incrustar el apunte", apunte.titulo, err);
                     }
                 }
                 
