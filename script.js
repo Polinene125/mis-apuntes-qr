@@ -119,6 +119,29 @@ function fileToBase64(file) {
     });
 }
 
+// ==========================================
+// INTEGRACIÓN CON CLOUDINARY
+// ==========================================
+async function uploadToCloudinary(fileOrBase64) {
+    const url = "https://api.cloudinary.com/v1_1/aayt8bku/auto/upload";
+    const formData = new FormData();
+    
+    formData.append("file", fileOrBase64);
+    formData.append("upload_preset", "ulwpezlx");
+
+    const response = await fetch(url, {
+        method: "POST",
+        body: formData
+    });
+
+    if (!response.ok) {
+        throw new Error("Error al subir a Cloudinary");
+    }
+
+    const data = await response.json();
+    return data.secure_url;
+}
+
 function formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -477,9 +500,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const win = window.open();
                 if (win) {
                     if(isPdf) {
-                        win.document.write(`<iframe src="${apunte.dataBase64}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%; position:absolute;"></iframe>`);
+                        win.document.write(`<iframe src="${apunte.downloadURL}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%; position:absolute;"></iframe>`);
                     } else {
-                        win.document.write(`<body style="margin:0;display:flex;justify-content:center;align-items:center;background:#111;min-height:100vh;"><img src="${apunte.dataBase64}" style="max-width:100%;max-height:100vh;"></body>`);
+                        win.document.write(`<body style="margin:0;display:flex;justify-content:center;align-items:center;background:#111;min-height:100vh;"><img src="${apunte.downloadURL}" style="max-width:100%;max-height:100vh;"></body>`);
                     }
                 } else {
                     alert("Por favor habilita las ventanas emergentes (pop-ups) en tu navegador para ver el archivo.");
@@ -528,25 +551,24 @@ document.addEventListener('DOMContentLoaded', () => {
             return showError(noteModalError, 'Formato no soportado. Solo JPG, PNG o PDF.');
         }
 
-        // Limitar PDFs a 700KB para que quepan en Firestore (1MB máximo por documento)
-        if (isPdf && file.size > 700 * 1024) {
-            return showError(noteModalError, 'El PDF es muy pesado. Máximo 700KB por base de datos gratuita.');
-        }
+        // Se eliminó la restricción estricta de 700KB para PDFs
 
         // Cierra el modal y muestra el loader
         modalNewNote.style.display = 'none';
         globalLoader.style.display = 'flex';
 
         try {
-            let dataBase64 = '';
+            let fileOrBase64 = file;
+            let approxBytes = file.size;
             
             if (isImage) {
-                dataBase64 = await compressImage(file);
-            } else {
-                dataBase64 = await fileToBase64(file);
+                // Comprimimos la imagen localmente antes de subirla para ahorrar datos móviles
+                fileOrBase64 = await compressImage(file);
+                approxBytes = Math.round((fileOrBase64.length * 3) / 4);
             }
             
-            const approxBytes = Math.round((dataBase64.length * 3) / 4);
+            // Subir a Cloudinary (soporta tanto archivos crudos como base64)
+            const secureUrl = await uploadToCloudinary(fileOrBase64);
             
             const newApunte = {
                 id: 'apt_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7),
@@ -555,7 +577,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tipo: isPdf ? 'pdf' : 'image',
                 fecha: new Date().toISOString(),
                 size: approxBytes,
-                dataBase64: dataBase64
+                downloadURL: secureUrl
             };
 
             await saveApunteDB(newApunte);
@@ -679,25 +701,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 return showError(uploadModeError, 'Formato no soportado. Solo JPG, PNG o PDF.');
             }
 
-            // Limitar PDFs a 700KB para que quepan en Firestore
-            if (isPdf && file.size > 700 * 1024) {
-                return showError(uploadModeError, 'El PDF es muy pesado. Máximo 700KB por base de datos gratuita.');
-            }
+            // Se eliminó la restricción estricta de 700KB para PDFs
 
             clearError(uploadModeError);
             uploadModeSuccess.style.display = 'none';
             globalLoader.style.display = 'flex';
 
             try {
-                let dataBase64 = '';
+                let fileOrBase64 = file;
+                let approxBytes = file.size;
                 
                 if (isImage) {
-                    dataBase64 = await compressImage(file);
-                } else {
-                    dataBase64 = await fileToBase64(file);
+                    fileOrBase64 = await compressImage(file);
+                    approxBytes = Math.round((fileOrBase64.length * 3) / 4);
                 }
                 
-                const approxBytes = Math.round((dataBase64.length * 3) / 4);
+                const secureUrl = await uploadToCloudinary(fileOrBase64);
                 
                 const newApunte = {
                     id: 'apt_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7),
@@ -706,7 +725,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tipo: isPdf ? 'pdf' : 'image',
                     fecha: new Date().toISOString(),
                     size: approxBytes,
-                    dataBase64: dataBase64
+                    downloadURL: secureUrl
                 };
 
                 await saveApunteDB(newApunte);
@@ -790,7 +809,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let previewHtml = `<div class="note-icon" style="margin: 10px 0;"><i class="${iconClass}"></i></div>`;
                 if (!isPdf) {
                     previewHtml = `<div style="height: 80px; overflow: hidden; margin-bottom: 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center; background: #000;">
-                                     <img src="${apunte.dataBase64}" style="max-width: 100%; max-height: 100%;">
+                                     <img src="${apunte.downloadURL}" style="max-width: 100%; max-height: 100%;">
                                    </div>`;
                 }
                 
@@ -824,18 +843,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 for (const apunte of apuntes) {
                     try {
+                        const response = await fetch(apunte.downloadURL);
+                        const arrayBuffer = await response.arrayBuffer();
+
                         if (apunte.tipo === 'image') {
                             // Es una imagen, incrustarla en una nueva página A4
                             const page = pdfDoc.addPage([595.28, 841.89]); // A4 en puntos
                             const { width, height } = page.getSize();
                             
                             let imgEmbed;
-                            // Determinar si es jpeg o png desde el base64
-                            if (apunte.dataBase64.startsWith('data:image/png')) {
-                                imgEmbed = await pdfDoc.embedPng(apunte.dataBase64);
-                            } else {
-                                // Por defecto tratamos como JPEG
-                                imgEmbed = await pdfDoc.embedJpg(apunte.dataBase64);
+                            // Intentamos embeber como jpg, si falla probamos png
+                            try {
+                                imgEmbed = await pdfDoc.embedJpg(arrayBuffer);
+                            } catch (e) {
+                                imgEmbed = await pdfDoc.embedPng(arrayBuffer);
                             }
                             
                             const imgDims = imgEmbed.scaleToFit(width - 40, height - 40); // 20pt de margen por lado
@@ -850,9 +871,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                         } else if (apunte.tipo === 'pdf') {
                             // Es un PDF, cargar y copiar todas sus páginas
-                            const existingPdfBytes = apunte.dataBase64;
-                            // pdf-lib requiere ArrayBuffer o Uint8Array para cargar PDFs base64
-                            const pdfToMerge = await PDFDocument.load(existingPdfBytes);
+                            const pdfToMerge = await PDFDocument.load(arrayBuffer);
                             const copiedPages = await pdfDoc.copyPages(pdfToMerge, pdfToMerge.getPageIndices());
                             
                             copiedPages.forEach((page) => {
