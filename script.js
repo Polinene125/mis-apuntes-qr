@@ -263,11 +263,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
             const materiaId = params.get('materia');
             const modo = params.get('modo');
+            const materiaNombre = params.get('nombre');
 
             if (modo === 'subir' && materiaId) {
                 // Modo subir
                 uploadModeContainer.style.display = 'flex';
-                await initUploadMode(materiaId);
+                await initUploadMode(materiaId, materiaNombre);
             } else {
                 // Modo normal
                 appContainer.style.display = 'flex';
@@ -596,7 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
         subjectQrContainer.innerHTML = '';
         
         const baseUrl = window.location.origin + window.location.pathname;
-        const qrUrl = `${baseUrl}?materia=${materiaId}&modo=subir`;
+        const qrUrl = `${baseUrl}?materia=${materiaId}&nombre=${encodeURIComponent(materiaName)}&modo=subir`;
 
         currentQrCode = new QRCode(subjectQrContainer, {
             text: qrUrl,
@@ -651,12 +652,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     let uploadMateria = null;
 
-    async function initUploadMode(materiaId) {
+    async function initUploadMode(materiaId, materiaNombre) {
         try {
             const subjectsDb = await getSubjectsDB();
             uploadMateria = subjectsDb.find(s => s.id === materiaId);
             
-            if (!uploadMateria) {
+            if (!uploadMateria && materiaNombre) {
+                // Si la materia no existe en este dispositivo (ej. celular), se auto-crea
+                const newMateria = { id: materiaId, name: materiaNombre };
+                await saveSubjectDB(newMateria);
+                uploadMateria = newMateria;
+            } else if (!uploadMateria) {
                 showError(uploadModeError, "Error: La materia no existe o fue eliminada.");
                 inputUploadTitle.disabled = true;
                 inputUploadFile.disabled = true;
