@@ -171,7 +171,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputLoginPassword = document.getElementById('login-password');
     const createError = document.getElementById('create-error');
     const loginError = document.getElementById('login-error');
-    const linkForgot = document.getElementById('link-forgot');
+    const linkToRegister = document.getElementById('link-to-register');
+    const linkToLogin = document.getElementById('link-to-login');
     const btnLogout = document.getElementById('btn-logout');
 
     // --- Referencias DOM (App - Materias) ---
@@ -241,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(authContainer) authContainer.style.display = 'flex';
             if(appContainer) appContainer.style.display = 'none';
             blockLogin.style.display = 'block';
-            blockCreatePassword.style.display = 'block'; // Mostrar ambos, o hacer toggle
+            blockCreatePassword.style.display = 'none'; // Mostrar solo login por defecto
         }
     });
 
@@ -325,11 +326,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     inputLoginPassword.addEventListener('keypress', (e) => { if (e.key === 'Enter') btnLogin.click(); });
 
-    if (linkForgot) {
-        linkForgot.addEventListener('click', async (e) => {
+    if (linkToRegister) {
+        linkToRegister.addEventListener('click', (e) => {
             e.preventDefault();
-            await signOut(auth);
-            location.reload();
+            blockLogin.style.display = 'none';
+            blockCreatePassword.style.display = 'block';
+        });
+    }
+
+    if (linkToLogin) {
+        linkToLogin.addEventListener('click', (e) => {
+            e.preventDefault();
+            blockCreatePassword.style.display = 'none';
+            blockLogin.style.display = 'block';
         });
     }
 
