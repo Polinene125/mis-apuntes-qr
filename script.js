@@ -558,53 +558,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnSaveNote.addEventListener('click', async () => {
         const title = inputNoteTitle.value.trim();
-        const file = inputNoteFile.files[0];
+        const files = inputNoteFile.files;
         
         if (!title) return showError(noteModalError, 'Escribe un título para el apunte.');
-        if (!file) return showError(noteModalError, 'Selecciona un archivo (JPG, PNG o PDF).');
-
-        const isPdf = file.type === 'application/pdf';
-        const isImage = file.type.startsWith('image/');
-
-        if (!isPdf && !isImage) {
-            return showError(noteModalError, 'Formato no soportado. Solo JPG, PNG o PDF.');
-        }
-
-        // Se eliminó la restricción estricta de 700KB para PDFs
+        if (files.length === 0) return showError(noteModalError, 'Selecciona al menos un archivo (JPG, PNG o PDF).');
 
         // Cierra el modal y muestra el loader
         modalNewNote.style.display = 'none';
         globalLoader.style.display = 'flex';
 
         try {
-            let fileOrBase64 = file;
-            let approxBytes = file.size;
-            
-            if (isImage) {
-                // Comprimimos la imagen localmente antes de subirla para ahorrar datos móviles
-                fileOrBase64 = await compressImage(file);
-                approxBytes = Math.round((fileOrBase64.length * 3) / 4);
-            }
-            
-            // Subir a Cloudinary (soporta tanto archivos crudos como base64)
-            const secureUrl = await uploadToCloudinary(fileOrBase64);
-            
-            const newApunte = {
-                id: 'apt_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7),
-                materiaId: activeSubjectId,
-                titulo: title,
-                tipo: isPdf ? 'pdf' : 'image',
-                fecha: new Date().toISOString(),
-                size: approxBytes,
-                downloadURL: secureUrl
-            };
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const isPdf = file.type === 'application/pdf';
+                const isImage = file.type.startsWith('image/');
 
-            await saveApunteDB(newApunte);
+                if (!isPdf && !isImage) {
+                    alert(`Formato no soportado en archivo: ${file.name}`);
+                    continue; // Saltar archivos no válidos
+                }
+
+                let fileOrBase64 = file;
+                let approxBytes = file.size;
+                
+                if (isImage) {
+                    // Comprimimos la imagen localmente
+                    fileOrBase64 = await compressImage(file);
+                    approxBytes = Math.round((fileOrBase64.length * 3) / 4);
+                }
+                
+                // Subir a Cloudinary
+                const secureUrl = await uploadToCloudinary(fileOrBase64);
+                
+                const finalTitle = files.length > 1 ? `${title} (${i + 1})` : title;
+
+                const newApunte = {
+                    id: 'apt_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7),
+                    materiaId: activeSubjectId,
+                    titulo: finalTitle,
+                    tipo: isPdf ? 'pdf' : 'image',
+                    fecha: new Date().toISOString(),
+                    size: approxBytes,
+                    downloadURL: secureUrl
+                };
+
+                await saveApunteDB(newApunte);
+            }
             loadNotes(activeSubjectId); // Recargar interfaz
-            
         } catch (e) {
             console.error("Error guardando apunte:", e);
-            alert("Error procesando o guardando el archivo. Asegúrate que no esté corrupto y que tengas espacio libre en el disco.");
+            alert("Error procesando o guardando los archivos. Verifica tu conexión.");
             // Restaurar modal en caso de fallo
             modalNewNote.style.display = 'flex'; 
         } finally {
@@ -708,58 +711,64 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!uploadMateria) return;
             
             const title = inputUploadTitle.value.trim();
-            const file = inputUploadFile.files[0];
+            const files = inputUploadFile.files;
             
             if (!title) return showError(uploadModeError, 'Escribe un título para el apunte.');
-            if (!file) return showError(uploadModeError, 'Selecciona un archivo (JPG, PNG o PDF).');
-
-            const isPdf = file.type === 'application/pdf';
-            const isImage = file.type.startsWith('image/');
-
-            if (!isPdf && !isImage) {
-                return showError(uploadModeError, 'Formato no soportado. Solo JPG, PNG o PDF.');
-            }
-
-            // Se eliminó la restricción estricta de 700KB para PDFs
+            if (files.length === 0) return showError(uploadModeError, 'Selecciona al menos un archivo (JPG, PNG o PDF).');
 
             clearError(uploadModeError);
             uploadModeSuccess.style.display = 'none';
             globalLoader.style.display = 'flex';
 
             try {
-                let fileOrBase64 = file;
-                let approxBytes = file.size;
-                
-                if (isImage) {
-                    fileOrBase64 = await compressImage(file);
-                    approxBytes = Math.round((fileOrBase64.length * 3) / 4);
-                }
-                
-                const secureUrl = await uploadToCloudinary(fileOrBase64);
-                
-                const newApunte = {
-                    id: 'apt_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7),
-                    materiaId: uploadMateria.id,
-                    titulo: title,
-                    tipo: isPdf ? 'pdf' : 'image',
-                    fecha: new Date().toISOString(),
-                    size: approxBytes,
-                    downloadURL: secureUrl
-                };
+                let successCount = 0;
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const isPdf = file.type === 'application/pdf';
+                    const isImage = file.type.startsWith('image/');
 
-                await saveApunteDB(newApunte);
-                
-                // Limpiar formulario y mostrar éxito
-                inputUploadTitle.value = '';
-                inputUploadFile.value = '';
-                uploadSuccessText.textContent = `Apunte guardado en ${uploadMateria.name}`;
-                uploadModeSuccess.style.display = 'block';
-                
-                // Ocultar mensaje de éxito después de unos segundos
-                setTimeout(() => {
-                    uploadModeSuccess.style.display = 'none';
-                }, 4000);
-                
+                    if (!isPdf && !isImage) {
+                        alert(`Formato no soportado en archivo: ${file.name}`);
+                        continue;
+                    }
+
+                    let fileOrBase64 = file;
+                    let approxBytes = file.size;
+                    
+                    if (isImage) {
+                        fileOrBase64 = await compressImage(file);
+                        approxBytes = Math.round((fileOrBase64.length * 3) / 4);
+                    }
+                    
+                    const secureUrl = await uploadToCloudinary(fileOrBase64);
+                    
+                    const finalTitle = files.length > 1 ? `${title} (${i + 1})` : title;
+
+                    const newApunte = {
+                        id: 'apt_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7),
+                        materiaId: uploadMateria.id,
+                        titulo: finalTitle,
+                        tipo: isPdf ? 'pdf' : 'image',
+                        fecha: new Date().toISOString(),
+                        size: approxBytes,
+                        downloadURL: secureUrl
+                    };
+
+                    await saveApunteDB(newApunte);
+                    successCount++;
+                }
+
+                if (successCount > 0) {
+                    inputUploadTitle.value = '';
+                    inputUploadFile.value = '';
+                    const textSuccess = successCount === 1 ? 'Apunte guardado' : `${successCount} apuntes guardados`;
+                    document.getElementById('upload-success-text').textContent = `${textSuccess} correctamente en "${uploadMateria.name}"`;
+                    uploadModeSuccess.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        uploadModeSuccess.style.display = 'none';
+                    }, 4000);
+                }
             } catch (e) {
                 console.error("Error guardando apunte en modo subir:", e);
                 showError(uploadModeError, "Error procesando o guardando el archivo. Intenta de nuevo.");
