@@ -637,37 +637,53 @@ document.addEventListener('DOMContentLoaded', () => {
             correctLevel : QRCode.CorrectLevel.H
         });
 
-        // Personalizar el QR agregando un recuadro con el nombre en el centro
-        setTimeout(() => {
+        // Personalizar el QR agregando el SVG generado por Gemini
+        setTimeout(async () => {
             const canvas = subjectQrContainer.querySelector('canvas');
-            if (canvas) {
-                const ctx = canvas.getContext('2d');
-                const center = canvas.width / 2;
-                const size = 56; // Tamaño de la caja blanca para que cubra parte del centro
-                
-                // Dibujar fondo blanco en el centro
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(center - size/2, center - size/2, size, size);
-                
-                // Dibujar bordes (opcional, para darle estilo)
-                ctx.strokeStyle = '#2B3A32';
-                ctx.lineWidth = 3;
-                ctx.strokeRect(center - size/2, center - size/2, size, size);
-                
-                // Dibujar texto corto (hasta 3 letras)
-                ctx.fillStyle = '#D9724B'; // Color coral de la paleta
-                ctx.font = 'bold 22px "Kalam", sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                
-                let shortName = materiaName.substring(0, 3).toUpperCase();
-                ctx.fillText(shortName, center, center);
-                
-                // Actualizar la imagen oculta si qrcode.js la generó (para compatibilidad de descarga)
-                const img = subjectQrContainer.querySelector('img');
-                if (img) {
-                    img.src = canvas.toDataURL("image/png");
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            const center = canvas.width / 2;
+            const size = 64; // Tamaño del fondo para el ícono
+            
+            // Dibujar fondo blanco en el centro
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(center - size/2, center - size/2, size, size);
+            
+            // Dibujar borde sutil
+            ctx.strokeStyle = '#2B3A32';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(center - size/2, center - size/2, size, size);
+
+            try {
+                // Llamar al endpoint de Vercel (Gemini API)
+                const response = await fetch(`/api/gemini-qr?materiaName=${encodeURIComponent(materiaName)}`);
+                if (response.ok) {
+                    const svgText = await response.text();
+                    
+                    // Convertir el SVG a un formato utilizable por Canvas
+                    const blob = new Blob([svgText], {type: 'image/svg+xml;charset=utf-8'});
+                    const url = URL.createObjectURL(blob);
+                    
+                    const iconImg = new Image();
+                    iconImg.onload = () => {
+                        // Pintar el ícono SVG de Gemini en el centro del recuadro
+                        const iconSize = size - 10;
+                        ctx.drawImage(iconImg, center - iconSize/2, center - iconSize/2, iconSize, iconSize);
+                        URL.revokeObjectURL(url);
+                        
+                        // Actualizar la imagen oculta base64 (usada para descargar el PNG final)
+                        const qrImg = subjectQrContainer.querySelector('img');
+                        if (qrImg) {
+                            qrImg.src = canvas.toDataURL("image/png");
+                        }
+                    };
+                    iconImg.src = url;
+                } else {
+                    console.warn("Fallo al obtener el icono de Gemini, dejando recuadro en blanco.");
                 }
+            } catch (err) {
+                console.error("Error conectando con la API de iconos", err);
             }
         }, 50);
     }
