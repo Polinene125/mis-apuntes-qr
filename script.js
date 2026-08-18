@@ -123,11 +123,21 @@ function fileToBase64(file) {
 // INTEGRACIÓN CON CLOUDINARY
 // ==========================================
 async function uploadToCloudinary(fileOrBase64) {
-    const url = "https://api.cloudinary.com/v1_1/aayt8bku/auto/upload";
+    // 1. Obtener la firma de seguridad desde el backend
+    const signResponse = await fetch('/api/sign-upload');
+    if (!signResponse.ok) {
+        throw new Error("Error obteniendo firma de seguridad.");
+    }
+    const { signature, timestamp, cloudName, apiKey } = await signResponse.json();
+
+    // 2. Subir archivo usando la firma (Signed Upload)
+    const url = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`;
     const formData = new FormData();
     
     formData.append("file", fileOrBase64);
-    formData.append("upload_preset", "ulwpezlx");
+    formData.append("api_key", apiKey);
+    formData.append("timestamp", timestamp);
+    formData.append("signature", signature);
 
     const response = await fetch(url, {
         method: "POST",
@@ -135,7 +145,7 @@ async function uploadToCloudinary(fileOrBase64) {
     });
 
     if (!response.ok) {
-        throw new Error("Error al subir a Cloudinary");
+        throw new Error("Error al subir archivo protegido a Cloudinary");
     }
 
     const data = await response.json();

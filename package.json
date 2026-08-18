@@ -1,0 +1,16 @@
+{
+  "name": "mis-apuntes-qr",
+  "version": "1.0.0",
+  "description": "Backend and frontend for Mis Apuntes QR",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel"
+  },
+  "dependencies": {
+    "cloudinary": "^2.0.0"
+  },
+  "devDependencies": {
+    "vercel": "^33.0.0"
+  }
+}
