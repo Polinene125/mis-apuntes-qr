@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis Apuntes QR</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Tipografía manuscrita "Kalam" para títulos e "Inter" para texto normal -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome para el ícono de cuaderno -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- QRCode.js para generación de códigos QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <!-- jsPDF y pdf-lib para exportación de apuntes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Tarjeta de Autenticación -->
+        <div class="card" id="auth-card">
+            <div class="card-header">
+                <!-- Ícono simple de cuaderno -->
+                <i class="fa-solid fa-book icon-notebook"></i>
+                <h1>Mis Apuntes</h1>
+            </div>
+            
+            <div class="card-body">
+                <!-- Bloque 1: Crear contraseña -->
+                <div id="block-create-password" style="display: none;">
+                    <h2>Crear contraseña</h2>
+                    <p class="subtitle">Protege tus apuntes con una contraseña.</p>
+                    <p id="create-error" class="error-msg" style="display: none;"></p>
+                    <div class="input-group">
+                        <input type="password" placeholder="Nueva contraseña" id="new-password">
+                    </div>
+                    <div class="input-group">
+                        <input type="password" placeholder="Repetir contraseña" id="confirm-password">
+                    </div>
+                    <button class="btn btn-primary" id="btn-save">Guardar</button>
+                </div>
+
+                <!-- Bloque 2: Iniciar sesión -->
+                <div id="block-login" style="display: none;">
+                    <h2>Iniciar sesión</h2>
+                    <p class="subtitle">Ingresa para ver tus apuntes.</p>
+                    <p id="login-error" class="error-msg" style="display: none;"></p>
+                    <div class="input-group">
+                        <input type="password" placeholder="Tu contraseña" id="login-password">
+                    </div>
+                    <button class="btn btn-accent" id="btn-login">Entrar</button>
+                    <div class="text-center mt-3">
+                        <a href="#" id="link-forgot" class="forgot-link">¿Olvidé mi contraseña / Borrar todo?</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- Cierre de .container para Auth -->
+
+    <!-- Contenedor Principal de la App (Oculto por defecto) -->
+    <div id="app-container" style="display: none;">
+        <div class="app-layout">
+            <!-- Sidebar de Materias -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Mis Materias</h2>
+                </div>
+                <ul class="subject-list" id="subject-list">
+                    <!-- Dinámico -->
+                </ul>
+                <button class="btn btn-primary btn-sm" id="btn-new-subject">
+                    <i class="fa-solid fa-plus"></i> Nueva Materia
+                </button>
+                <div class="sidebar-footer">
+                    <a href="#" id="btn-logout" class="forgot-link" style="font-size: 1rem;">Cerrar sesión</a>
+                </div>
+            </aside>
+
+            <!-- Área principal (Contenido de la materia) -->
+            <main class="main-content">
+                <!-- Estado vacío: Sin materias -->
+                <div id="empty-subjects-state" class="empty-state">
+                    <i class="fa-solid fa-chalkboard icon-large"></i>
+                    <h2>Bienvenido a tu pizarrón</h2>
+                    <p>Aún no tienes ninguna materia. Crea la primera para empezar a organizar tus apuntes.</p>
+                    <div class="chalk-line"></div>
+                </div>
+
+                <!-- Panel de materia activa -->
+                <div id="active-subject-panel" style="display: none;">
+                    <div class="subject-header">
+                        <h2 id="active-subject-title" style="flex: 1; margin-right: 15px; word-break: break-word;">Nombre de Materia</h2>
+                        <div style="display: flex; gap: 10px; flex-shrink: 0;">
+                            <button class="btn btn-primary btn-sm" id="btn-add-note">
+                                <i class="fa-solid fa-plus"></i> Apunte
+                            </button>
+                            <button class="btn btn-secondary btn-sm" id="btn-show-subject-qr" title="Ver QR de la Materia">
+                                <i class="fa-solid fa-qrcode"></i>
+                            </button>
+                            <button class="btn btn-danger btn-sm" id="btn-delete-subject" title="Borrar Materia">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="subject-body">
+                        <!-- Estado vacío de los apuntes -->
+                        <div id="empty-notes-state" class="empty-state" style="opacity: 0.6; margin-top: 50px;">
+                            <i class="fa-regular fa-folder-open icon-large"></i>
+                            <h3>Sin apuntes todavía</h3>
+                            <p>Agrega fotos de tu cuaderno o archivos PDF usando el botón de arriba.</p>
+                        </div>
+
+                        <!-- Cuadrícula de apuntes -->
+                        <div id="notes-grid" class="notes-grid" style="display: none;">
+                            <!-- Dinámico -->
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Contenedor Modo Subir (Oculto por defecto) -->
+    <div id="upload-mode-container" style="display: none; align-items: center; justify-content: center; min-height: 100vh; padding: 20px;">
+        <div class="card" style="max-width: 500px; width: 100%;">
+            <div class="card-header">
+                <i class="fa-solid fa-cloud-arrow-up icon-notebook"></i>
+                <h1>Subir Apunte</h1>
+            </div>
+            <div class="card-body">
+                <h2 id="upload-subject-title" style="color: var(--accent-yellow); margin-bottom: 20px; text-align: center; word-break: break-word;">Cargando Materia...</h2>
+                
+                <p id="upload-mode-error" class="error-msg" style="display: none;"></p>
+                <div id="upload-mode-success" style="display: none; background: rgba(43, 58, 50, 0.8); border: 1px solid var(--accent-yellow); color: var(--text-cream); padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+                    <i class="fa-solid fa-check" style="color: var(--accent-yellow); margin-right: 10px;"></i>
+                    <span id="upload-success-text">Apunte guardado correctamente</span>
+                </div>
+
+                <div class="input-group">
+                    <input type="text" id="input-upload-title" placeholder="Título (ej. Clase 1)" maxlength="50" autocomplete="off">
+                </div>
+                
+                <div class="input-group">
+                    <input type="file" id="input-upload-file" accept="image/jpeg,image/png,application/pdf" style="background: rgba(0,0,0,0.2); padding: 10px; width: 100%; border-radius: 8px; border: 1px dashed rgba(241, 234, 215, 0.3); color: var(--text-cream); cursor: pointer; font-size: 0.9rem;">
+                    <small style="display: block; margin-top: 5px; color: rgba(241, 234, 215, 0.5); font-size: 0.8rem;">Fotos (JPG/PNG) se comprimen. PDFs máximo 8MB.</small>
+                </div>
+                
+                <button class="btn btn-primary" id="btn-upload-save" style="width: 100%; margin-top: 15px; font-size: 1.1rem; padding: 12px;">
+                    <i class="fa-solid fa-upload"></i> Guardar apunte
+                </button>
+
+                <div class="text-center mt-3" style="margin-top: 25px; display: flex; flex-direction: column; gap: 10px;">
+                    <a href="#" id="link-go-export" class="forgot-link" style="color: var(--accent-yellow);">Ver y descargar todos los apuntes de esta materia</a>
+                    <a href="#" id="link-exit-upload" class="forgot-link" style="opacity: 0.7;">Ir al dashboard principal</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor Modo Exportación (Oculto por defecto) -->
+    <div id="export-mode-container" style="display: none; align-items: center; justify-content: center; min-height: 100vh; padding: 20px;">
+        <div class="card" style="max-width: 800px; width: 100%;">
+            <div class="card-header">
+                <i class="fa-solid fa-file-pdf icon-notebook"></i>
+                <h1 style="font-size: 1.5rem;">Exportar Apuntes</h1>
+            </div>
+            <div class="card-body">
+                <h2 id="export-subject-title" style="color: var(--accent-yellow); margin-bottom: 20px; text-align: center; word-break: break-word;">Materia</h2>
+                
+                <!-- Cuadrícula de miniaturas para la exportación -->
+                <div id="export-thumbnails-grid" class="notes-grid" style="margin-bottom: 25px; max-height: 350px; overflow-y: auto; padding-right: 10px;">
+                    <!-- Dinámico -->
+                </div>
+                
+                <div id="export-empty-state" class="empty-state" style="display: none; margin-bottom: 25px; opacity: 0.6;">
+                    <p>Esta materia aún no tiene apuntes.</p>
+                </div>
+                
+                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" id="btn-back-to-upload" style="flex: 1;">Volver a subir</button>
+                    <button class="btn btn-primary" id="btn-download-pdf" style="flex: 2; font-weight: bold;">
+                        <i class="fa-solid fa-download"></i> Descargar todo como PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Nueva Materia -->
+    <div id="modal-new-subject" class="modal" style="display: none;">
+        <div class="modal-content card">
+            <h2 style="color: var(--text-cream); margin-bottom: 10px;">Nueva Materia</h2>
+            <p id="modal-error" class="error-msg" style="display: none;"></p>
+            <div class="input-group" style="margin-top: 15px;">
+                <input type="text" id="input-subject-name" placeholder="Ej. Matemáticas" maxlength="30" autocomplete="off">
+            </div>
+            <div class="modal-actions" style="display: flex; gap: 10px; margin-top: 10px;">
+                <button class="btn btn-secondary" id="btn-cancel-subject">Cancelar</button>
+                <button class="btn btn-primary" id="btn-save-subject">Crear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Nuevo Apunte -->
+    <div id="modal-new-note" class="modal" style="display: none;">
+        <div class="modal-content card">
+            <h2 style="color: var(--text-cream); margin-bottom: 10px;">Nuevo Apunte</h2>
+            <p id="note-modal-error" class="error-msg" style="display: none;"></p>
+            
+            <div class="input-group" style="margin-top: 15px;">
+                <input type="text" id="input-note-title" placeholder="Título (ej. Tema 1)" maxlength="50" autocomplete="off">
+            </div>
+            
+            <div class="input-group">
+                <input type="file" id="input-note-file" accept="image/jpeg,image/png,application/pdf" style="background: rgba(0,0,0,0.2); padding: 10px; width: 100%; border-radius: 8px; border: 1px dashed rgba(241, 234, 215, 0.3); color: var(--text-cream); cursor: pointer; font-size: 0.9rem;">
+                <small style="display: block; margin-top: 5px; color: rgba(241, 234, 215, 0.5); font-size: 0.8rem;">Fotos (JPG/PNG) se comprimen automáticamente. PDFs máximo 8MB.</small>
+            </div>
+            
+            <div class="modal-actions" style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-secondary" id="btn-cancel-note">Cancelar</button>
+                <button class="btn btn-primary" id="btn-save-note">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para QR de la Materia -->
+    <div id="modal-subject-qr" class="modal" style="display: none;">
+        <div class="modal-content card" style="max-width: 400px; text-align: center;">
+            <h2 style="color: var(--text-cream); margin-bottom: 10px;">QR de la Materia</h2>
+            <p style="color: rgba(241,234,215,0.7); font-size: 0.9rem; margin-bottom: 15px;">Pega este QR en tu cuaderno. Escanéalo para subir apuntes directamente a esta materia.</p>
+            
+            <h3 id="subject-qr-name" style="color: var(--accent-yellow); margin-bottom: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Nombre</h3>
+            
+            <!-- Contenedor del QR -->
+            <div id="subject-qr-container" style="background: white; padding: 20px; border-radius: 8px; display: inline-flex; justify-content: center; align-items: center; margin-bottom: 20px; min-height: 200px;">
+                <!-- QR se renderiza aquí -->
+            </div>
+            
+            <div class="modal-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-secondary" id="btn-close-subject-qr" style="flex: 1;">Cerrar</button>
+                <button class="btn btn-accent" id="btn-download-subject-qr" style="flex: 1;">Descargar PNG</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loader global -->
+    <div id="global-loader" class="modal" style="display: none; flex-direction: column; z-index: 2000;">
+        <div class="spinner"></div>
+        <p style="margin-top: 20px; font-weight: 600; font-size: 1.1rem; color: var(--accent-yellow); letter-spacing: 1px;">Procesando...</p>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
