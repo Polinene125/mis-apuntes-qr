@@ -636,6 +636,40 @@ document.addEventListener('DOMContentLoaded', () => {
             colorLight : "#ffffff",
             correctLevel : QRCode.CorrectLevel.H
         });
+
+        // Personalizar el QR agregando un recuadro con el nombre en el centro
+        setTimeout(() => {
+            const canvas = subjectQrContainer.querySelector('canvas');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                const center = canvas.width / 2;
+                const size = 56; // Tamaño de la caja blanca para que cubra parte del centro
+                
+                // Dibujar fondo blanco en el centro
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(center - size/2, center - size/2, size, size);
+                
+                // Dibujar bordes (opcional, para darle estilo)
+                ctx.strokeStyle = '#2B3A32';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(center - size/2, center - size/2, size, size);
+                
+                // Dibujar texto corto (hasta 3 letras)
+                ctx.fillStyle = '#D9724B'; // Color coral de la paleta
+                ctx.font = 'bold 22px "Kalam", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                let shortName = materiaName.substring(0, 3).toUpperCase();
+                ctx.fillText(shortName, center, center);
+                
+                // Actualizar la imagen oculta si qrcode.js la generó (para compatibilidad de descarga)
+                const img = subjectQrContainer.querySelector('img');
+                if (img) {
+                    img.src = canvas.toDataURL("image/png");
+                }
+            }
+        }, 50);
     }
 
     btnShowSubjectQr.addEventListener('click', () => {
