@@ -118,11 +118,13 @@ h2 {
     margin-bottom: 20px;
 }
 
+input[type="email"],
+input[type="text"],
 input[type="password"] {
     width: 100%;
     padding: 14px 16px;
     border-radius: 8px;
-    background-color: rgba(20, 28, 24, 0.4); /* Fondo más oscuro para el input */
+    background-color: rgba(20, 28, 24, 0.4);
     border: 2px solid rgba(241, 234, 215, 0.15);
     color: var(--text-cream);
     font-family: var(--font-text);
@@ -131,10 +133,14 @@ input[type="password"] {
     transition: all 0.3s ease;
 }
 
+input[type="email"]::placeholder,
+input[type="text"]::placeholder,
 input[type="password"]::placeholder {
-    color: rgba(241, 234, 215, 0.4);
+    color: rgba(241, 234, 215, 0.5);
 }
 
+input[type="email"]:focus,
+input[type="text"]:focus,
 input[type="password"]:focus {
     border-color: var(--accent-yellow);
     background-color: rgba(20, 28, 24, 0.6);
@@ -156,6 +162,10 @@ input[type="password"]:focus {
     letter-spacing: 0.5px;
     position: relative;
     top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 .btn-primary {
@@ -329,8 +339,9 @@ input[type="password"]:focus {
 
 .subject-item.active {
     background-color: rgba(232, 177, 76, 0.15);
-    color: var(--accent-yellow);
+    color: #FFD166; /* Amarillo más brillante para alto contraste */
     border-left: 3px solid var(--accent-yellow);
+    font-weight: 600;
 }
 
 .sidebar-footer {
@@ -338,6 +349,14 @@ input[type="password"]:focus {
     margin-top: 15px;
     padding-top: 15px;
     border-top: 1px dashed rgba(241, 234, 215, 0.1);
+}
+
+.sidebar-footer .forgot-link {
+    color: rgba(241, 234, 215, 0.7);
+}
+
+.sidebar-footer .forgot-link:hover {
+    color: var(--accent-coral);
 }
 
 /* Área Principal */
@@ -360,6 +379,8 @@ input[type="password"]:focus {
     border-bottom: 2px dashed rgba(241, 234, 215, 0.15);
     padding-bottom: 15px;
     margin-bottom: 25px;
+    flex-wrap: wrap; /* Permitir que los botones bajen si no hay espacio */
+    gap: 15px;
 }
 
 .subject-header h2 {
@@ -430,11 +451,16 @@ input[type="password"]:focus {
 }
 
 .btn-danger {
-    background-color: rgba(217, 114, 75, 0.1);
+    background-color: rgba(217, 114, 75, 0.15);
     color: var(--accent-coral);
-    border: 1px solid var(--accent-coral);
-    box-shadow: none;
+    border: none;
+    box-shadow: 0 4px 0px rgba(170, 80, 50, 0.6);
     width: auto;
+}
+
+.btn-danger:active {
+    top: 4px;
+    box-shadow: 0 0px 0px rgba(170, 80, 50, 0.6);
 }
 
 .btn-danger:hover {
@@ -576,13 +602,24 @@ input[type="file"]::file-selector-button:hover {
         border-right: none;
         border-bottom: 1px solid rgba(241, 234, 215, 0.1);
         padding: 15px;
-        flex-direction: row;
-        align-items: center;
+        flex-direction: column; /* Apilar elementos en móvil */
         gap: 10px;
     }
     
-    .sidebar-header, .sidebar-footer {
+    .sidebar-header {
         display: none;
+    }
+
+    .sidebar-footer {
+        display: block;
+        margin-top: 0;
+        padding-top: 5px;
+        border-top: none;
+        text-align: right;
+    }
+    
+    .sidebar-footer .forgot-link {
+        font-size: 0.85rem !important;
     }
 
     .subject-list {
@@ -590,8 +627,9 @@ input[type="file"]::file-selector-button:hover {
         overflow-x: auto;
         overflow-y: hidden;
         margin-bottom: 0;
-        padding-bottom: 0;
+        padding-bottom: 5px;
         gap: 10px;
+        width: 100%;
     }
 
     .subject-item {
@@ -608,15 +646,26 @@ input[type="file"]::file-selector-button:hover {
     }
     
     #btn-new-subject {
-        width: auto;
+        width: 100%;
         white-space: nowrap;
         padding: 10px;
     }
     
     .subject-header {
         flex-direction: column;
-        gap: 15px;
-        align-items: flex-start;
+        align-items: center;
+        text-align: center;
+    }
+
+    .subject-header h2 {
+        font-size: 1.8rem;
+        text-align: center;
+        margin-right: 0;
+    }
+
+    .subject-header > div {
+        flex-wrap: wrap;
+        justify-content: center;
     }
 }
 
